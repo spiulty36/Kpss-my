@@ -1,0 +1,49 @@
+name: Günlük ilan taraması
+
+on:
+  schedule:
+    - cron: "0 5 * * *"   # her gün 05:00 UTC = 08:00 Türkiye saati
+  workflow_dispatch:       # elle çalıştırmak için
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.yayin.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: İlanları tara
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python kamu_ilan_takip.py
+      - name: Görülen ilanları kaydet
+        run: |
+          git config user.name "ilan-bot"
+          git config user.email "ilan-bot@users.noreply.github.com"
+          git add gorulenler.json ilanlar.json
+          git diff --cached --quiet || (git commit -m "İlanlar güncellendi" && git pull --rebase && git push)
+      - name: Siteyi hazırla
+        run: |
+          mkdir site
+          cp ilanlar.html site/index.html
+          cp ilanlar.csv site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: yayin
+        uses: actions/deploy-pages@v4
